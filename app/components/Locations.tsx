@@ -13,7 +13,7 @@ export default function Locations() {
       <div className="mx-auto max-w-6xl px-6">
         <div className="mb-14 flex flex-col gap-4 reveal sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="font-mono text-xs uppercase tracking-widest text-accent">Locations</p>
+            <p className="font-mono text-xs uppercase tracking-[0.2em] text-text-muted">04 — Locations</p>
             <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-text sm:text-4xl">
               Twelve regions. One control panel.
             </h2>
@@ -24,7 +24,7 @@ export default function Locations() {
           </p>
         </div>
 
-        <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+        <div className="divide-y divide-border overflow-hidden border border-border">
           {REGIONS.map((r, i) => (
             <div
               key={r.code}
@@ -32,7 +32,7 @@ export default function Locations() {
               style={{ animationDelay: `${0.05 + i * 0.05}s` }}
             >
               <div className="flex items-center gap-4">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-status" />
+                <span className="font-mono text-xs text-text-muted">{String(i + 1).padStart(2, "0")}</span>
                 <span className="font-display text-sm text-text sm:text-base">{r.city}</span>
               </div>
               <div className="flex items-center gap-6 font-mono text-xs text-text-muted sm:text-sm">

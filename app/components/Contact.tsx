@@ -8,11 +8,11 @@ const CONTACT_COLUMNS = [
   },
   {
     caption: "Phone",
-    detail: "+1 (000) 000-0000",
+    detail: "+91 00000 00000",
   },
   {
     caption: "Office",
-    detail: "221B Server Row, Suite 4\nAustin, TX 73301",
+    detail: "4th Floor, Cyber Towers\nHitech City, Hyderabad 500081",
   },
   {
     caption: "Support hours",
@@ -25,7 +25,7 @@ export default function Contact() {
     <section id="contact" className="py-24">
       <div className="mx-auto max-w-6xl px-6">
         <div className="mb-14 max-w-xl reveal">
-          <p className="font-mono text-xs uppercase tracking-widest text-accent">Contact</p>
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-text-muted">05 — Contact</p>
           <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-text sm:text-4xl">
             Talk to the people running the servers.
           </h2>
@@ -36,7 +36,7 @@ export default function Contact() {
         </div>
 
         <div className="grid gap-10 lg:grid-cols-[1fr_1fr]">
-          <form className="reveal flex flex-col gap-5 rounded-xl border border-border bg-surface p-8">
+          <form className="reveal flex flex-col gap-5 border border-border bg-surface p-8">
             <div className="grid gap-5 sm:grid-cols-2">
               <label className="flex flex-col gap-2 text-sm text-text-muted">
                 Name
@@ -44,7 +44,7 @@ export default function Contact() {
                   type="text"
                   name="name"
                   placeholder="Jane Doe"
-                  className="rounded-md border border-border bg-bg px-4 py-3 text-text outline-none placeholder:text-text-muted/60 focus:border-accent"
+                  className="border border-border bg-bg px-4 py-3 text-text outline-none placeholder:text-text-muted/60 focus:border-text"
                 />
               </label>
               <label className="flex flex-col gap-2 text-sm text-text-muted">
@@ -53,7 +53,7 @@ export default function Contact() {
                   type="email"
                   name="email"
                   placeholder="jane@company.com"
-                  className="rounded-md border border-border bg-bg px-4 py-3 text-text outline-none placeholder:text-text-muted/60 focus:border-accent"
+                  className="border border-border bg-bg px-4 py-3 text-text outline-none placeholder:text-text-muted/60 focus:border-text"
                 />
               </label>
             </div>
@@ -63,20 +63,20 @@ export default function Contact() {
                 name="message"
                 rows={5}
                 placeholder="Tell us what you're building..."
-                className="resize-none rounded-md border border-border bg-bg px-4 py-3 text-text outline-none placeholder:text-text-muted/60 focus:border-accent"
+                className="resize-none border border-border bg-bg px-4 py-3 text-text outline-none placeholder:text-text-muted/60 focus:border-text"
               />
             </label>
             {/* EDIT: this form has no backend yet — wire it to Formspree,
                a serverless function, or an API route before going live. */}
             <button
               type="submit"
-              className="mt-2 rounded-md bg-accent px-6 py-3 text-sm font-medium text-[#05060a] transition-transform hover:scale-[1.02]"
+              className="mt-2 bg-text px-6 py-3 text-sm font-medium text-bg transition-opacity hover:opacity-80"
             >
               Send message
             </button>
           </form>
 
-          <div className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-px overflow-hidden border border-border bg-border sm:grid-cols-2">
             {CONTACT_COLUMNS.map((c, i) => (
               <div
                 key={c.caption}

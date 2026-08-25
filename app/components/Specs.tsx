@@ -26,13 +26,13 @@ export default function Specs() {
     <section id="specs" className="border-b border-border bg-surface/40 py-24">
       <div className="mx-auto max-w-6xl px-6">
         <div className="mb-14 max-w-xl reveal">
-          <p className="font-mono text-xs uppercase tracking-widest text-accent">Infrastructure</p>
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-text-muted">03 — Infrastructure</p>
           <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-text sm:text-4xl">
             Built on hardware, not promises.
           </h2>
         </div>
 
-        <div className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-px overflow-hidden border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
           {SPECS.map((s, i) => (
             <div
               key={s.label}
