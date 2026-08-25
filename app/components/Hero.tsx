@@ -53,7 +53,7 @@ export default function Hero() {
         </div>
 
         <div
-          className="reveal flex items-center justify-center border border-border bg-surface p-6"
+          className="reveal flex items-center justify-center"
           style={{ animationDelay: "0.15s" }}
         >
           <AsciiGlobe />
