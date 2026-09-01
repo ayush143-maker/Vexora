@@ -2,12 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-// Rotating wireframe globe rendered as ASCII characters on a monospace grid.
-// Replaces the earlier glow-dot canvas: same idea (server regions on a
-// sphere) but rendered in the site's own type system instead of a generic
-// "tech gradient" look — it reads as an editorial/technical artifact, not a
-// SaaS decoration.
-const CHARS = " .:-=+*#%@";
+const CHARS = ".:-=+*#%@";
 const RAMP_LEN = CHARS.length;
 
 export default function AsciiGlobe() {
@@ -21,12 +16,12 @@ export default function AsciiGlobe() {
       "(prefers-reduced-motion: reduce)"
     ).matches;
 
+    // --- your original values - kept exactly ---
     const COLS = 64;
     const ROWS = 32;
     const R = 1;
-
-    // Fibonacci sphere sampling for even point distribution.
     const POINTS = 340;
+
     const sphere: { x: number; y: number; z: number }[] = [];
     const golden = Math.PI * (3 - Math.sqrt(5));
     for (let i = 0; i < POINTS; i++) {
@@ -40,8 +35,52 @@ export default function AsciiGlobe() {
       });
     }
 
+    // --- wireframe cache (doesn't change your values) ---
+    const MERIDIANS = 12;
+    const PARALLELS = 7;
+    const MER_STEPS = 44;
+    const PAR_STEPS = 56;
+
+    const meridians: { x: number; y: number; z: number }[][] = [];
+    for (let m = 0; m < MERIDIANS; m++) {
+      const lon = (m / MERIDIANS) * Math.PI * 2;
+      const line = [];
+      for (let s = 0; s <= MER_STEPS; s++) {
+        const lat = -Math.PI / 2 + (s / MER_STEPS) * Math.PI;
+        const c = Math.cos(lat);
+        line.push({ x: c * Math.cos(lon), y: Math.sin(lat), z: c * Math.sin(lon) });
+      }
+      meridians.push(line);
+    }
+
+    const parallels: { x: number; y: number; z: number }[][] = [];
+    for (let p = 1; p <= PARALLELS; p++) {
+      const lat = -Math.PI / 2 + (p / (PARALLELS + 1)) * Math.PI;
+      const y = Math.sin(lat);
+      const r = Math.cos(lat);
+      const line = [];
+      for (let s = 0; s <= PAR_STEPS; s++) {
+        const lon = (s / PAR_STEPS) * Math.PI * 2;
+        line.push({ x: r * Math.cos(lon), y, z: r * Math.sin(lon) });
+      }
+      parallels.push(line);
+    }
+
     let raf = 0;
     let angle = 0;
+
+    // realism tweaks
+    const PERSPECTIVE = 2.4; // viewer distance
+    const TILT = 0.34;
+    const CHAR_ASPECT = 0.52; // fixes 64x32 stretched oval
+    const AMBIENT = 0.18;
+    const cosTilt = Math.cos(TILT);
+    const sinTilt = Math.sin(TILT);
+
+    // normalized light
+    const lx = -0.55, ly = 0.68, lz = 0.6;
+    const llen = Math.hypot(lx, ly, lz);
+    const light = { x: lx / llen, y: ly / llen, z: lz / llen };
 
     function frame() {
       const buffer: string[][] = Array.from({ length: ROWS }, () =>
@@ -54,37 +93,71 @@ export default function AsciiGlobe() {
       const cosA = Math.cos(angle);
       const sinA = Math.sin(angle);
 
+      // helper to rotate + project
+      const rotProject = (px: number, py: number, pz: number) => {
+        // Y spin
+        const x1 = px * cosA - pz * sinA;
+        const z1 = px * sinA + pz * cosA;
+        const y1 = py;
+        // X tilt
+        const y2 = y1 * cosTilt - z1 * sinTilt;
+        const z2 = y1 * sinTilt + z1 * cosTilt;
+        const x2 = x1;
+
+        const scale = PERSPECTIVE / (PERSPECTIVE - z2);
+        const sx = x2 * scale;
+        const sy = y2 * scale;
+
+        const screenX = Math.round(
+          (sx * R * CHAR_ASPECT + 1) * 0.5 * (COLS - 1)
+        );
+        const screenY = Math.round((-sy * R + 1) * 0.5 * (ROWS - 1));
+
+        return { x2, y2, z2, screenX, screenY };
+      };
+
+      // 1. surface
       for (const p of sphere) {
-        // rotate around Y axis
-        const x = p.x * cosA - p.z * sinA;
-        const z = p.x * sinA + p.z * cosA;
-        const y = p.y;
+        const { x2, y2, z2, screenX, screenY } = rotProject(p.x, p.y, p.z);
+        if (screenX < 0 || screenX >= COLS || screenY < 0 || screenY >= ROWS)
+          continue;
+        if (z2 <= depth[screenY][screenX]) continue;
 
-        // light direction (fixed, upper-left-front) for shading
-        const lightX = -0.5;
-        const lightY = 0.6;
-        const lightZ = 0.7;
-        const brightness = Math.max(0, x * lightX + y * lightY + z * lightZ);
+        const b = Math.max(0, x2 * light.x + y2 * light.y + z2 * light.z);
+        let lum = AMBIENT + (1 - AMBIENT) * b;
+        if (z2 < 0) lum *= 0.38; // hide back hemisphere
 
-        // perspective-ish project to grid (aspect-corrected for char cells)
-        const screenX = Math.round((x * R + 1) * 0.5 * (COLS - 1));
-        const screenY = Math.round((-y * R + 1) * 0.5 * (ROWS - 1));
-
-        if (
-          screenX >= 0 &&
-          screenX < COLS &&
-          screenY >= 0 &&
-          screenY < ROWS &&
-          z > depth[screenY][screenX]
-        ) {
-          depth[screenY][screenX] = z;
-          const rampIdx = Math.min(
-            RAMP_LEN - 1,
-            Math.floor(brightness * (RAMP_LEN - 1) * 1.3)
-          );
-          buffer[screenY][screenX] = CHARS[rampIdx] ?? CHARS[0];
-        }
+        const idx = Math.min(
+          RAMP_LEN - 1,
+          Math.floor(lum * (RAMP_LEN - 1) * 1.3)
+        );
+        buffer[screenY][screenX] = CHARS[idx]?? " ";
+        depth[screenY][screenX] = z2;
       }
+
+      // 2. wireframe overlay - only front
+      const plotWire = (
+        p: { x: number; y: number; z: number },
+        isMeridian: boolean
+      ) => {
+        const { x2, y2, z2, screenX, screenY } = rotProject(p.x, p.y, p.z);
+        if (screenX < 0 || screenX >= COLS || screenY < 0 || screenY >= ROWS)
+          return;
+        if (z2 < -0.08) return; // cull back wire
+        if (z2 + 0.005 < depth[screenY][screenX]) return;
+
+        const b = Math.max(0, x2 * light.x + y2 * light.y + z2 * light.z);
+        const isPole = Math.abs(y2) > 0.9;
+        let ch = isMeridian? "+" : "-";
+        if (!isMeridian) ch = b > 0.45? "-" : ".";
+        else ch = isPole? "+" : b > 0.5? "+" : ":";
+
+        buffer[screenY][screenX] = ch;
+        depth[screenY][screenX] = z2 + 0.01;
+      };
+
+      for (const line of parallels) for (const p of line) plotWire(p, false);
+      for (const line of meridians) for (const p of line) plotWire(p, true);
 
       if (pre) {
         pre.textContent = buffer.map((row) => row.join("")).join("\n");
