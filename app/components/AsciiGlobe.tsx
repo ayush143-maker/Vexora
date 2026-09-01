@@ -2,102 +2,173 @@
 
 import { useEffect, useRef } from "react";
 
-// Same grid size as the original component.
+// Same grid size as your original globe.
 const COLS = 64;
 const ROWS = 32;
 
-// Slightly inside the full bounds so the globe does not clip harshly.
-const RADIUS = 0.985;
+const R = 0.985;
+const TILT = 0.38;
+const SPEED = 0.006;
 
-// Fixed camera tilt so the poles and latitude lines read as a globe.
-const TILT = 0.42;
+// Dot-style ramp: keep it subtle and "dotted".
+const LAND_RAMP = ".:o";
+const OUTLINE_CHAR = ".";
 
-const SPEED = 0.0055;
+// [longitude, latitude, longitudeRadius, latitudeRadius]
+// This is a stylized low-res world map made from overlapping land blobs.
+type LandEllipse = [number, number, number, number];
 
-// ASCII brightness ramp.
-const RAMP = ".:-=+*#%@";
-const MARKER_CHAR = "@";
+const LAND_ELLIPSES: LandEllipse[] = [
+  // North America
+  [-152, 64, 16, 8],
+  [-125, 58, 15, 12],
+  [-95, 58, 25, 14],
+  [-70, 55, 15, 12],
+  [-98, 40, 28, 10],
+  [-80, 38, 12, 10],
+  [-102, 24, 10, 8],
+  [-88, 15, 8, 5],
+  [-112, 27, 4, 7],
+  [-75, 20, 8, 3],
 
-type GridPoint = {
-  x: number;
-  y: number;
-  z: number;
-  major: boolean;
-};
+  // Greenland / Iceland
+  [-42, 74, 16, 9],
+  [-19, 65, 5, 4],
 
-type MarkerPoint = {
-  x: number;
-  y: number;
-  z: number;
-};
+  // South America
+  [-68, 7, 14, 8],
+  [-55, 2, 12, 8],
+  [-47, -10, 16, 14],
+  [-52, -25, 12, 10],
+  [-72, -5, 6, 18],
+  [-70, -30, 5, 14],
+  [-64, -38, 10, 12],
+  [-69, -48, 5, 8],
 
-function normalize(x: number, y: number, z: number) {
-  const d = Math.hypot(x, y, z) || 1;
-  return { x: x / d, y: y / d, z: z / d };
+  // Africa
+  [0, 28, 20, 8],
+  [-8, 12, 14, 10],
+  [15, 23, 20, 8],
+  [30, 27, 8, 7],
+  [45, 8, 8, 7],
+  [20, 2, 16, 12],
+  [35, -5, 10, 12],
+  [22, -25, 12, 10],
+  [47, -20, 4, 8],
+
+  // Europe
+  [-5, 40, 7, 5],
+  [2, 47, 8, 7],
+  [-3, 54, 4, 6],
+  [15, 62, 10, 10],
+  [12, 43, 3, 6],
+  [22, 42, 8, 7],
+  [30, 52, 18, 10],
+  [24, 58, 8, 5],
+
+  // Middle East / Central Asia
+  [38, 38, 10, 6],
+  [45, 27, 14, 10],
+  [48, 42, 10, 6],
+  [65, 45, 18, 10],
+
+  // Russia / Siberia
+  [50, 58, 20, 12],
+  [90, 60, 35, 12],
+  [130, 62, 25, 10],
+  [160, 57, 6, 8],
+  [170, 60, 10, 8],
+  [175, 64, 8, 6],
+
+  // South Asia
+  [78, 25, 10, 8],
+  [78, 15, 8, 10],
+  [81, 7, 2, 2],
+
+  // East Asia
+  [110, 35, 18, 12],
+  [105, 25, 12, 8],
+  [85, 32, 12, 6],
+  [127, 37, 3, 5],
+  [138, 38, 4, 8],
+
+  // Southeast Asia / islands
+  [102, 16, 8, 10],
+  [102, 4, 5, 8],
+  [101, 0, 6, 3],
+  [114, 0, 7, 5],
+  [110, -7, 8, 2],
+  [122, -2, 6, 5],
+  [145, -6, 10, 4],
+  [122, 12, 4, 7],
+
+  // Australia / Oceania
+  [125, -25, 15, 12],
+  [145, -28, 10, 12],
+  [135, -15, 10, 6],
+  [146, -42, 3, 3],
+  [171, -41, 5, 7],
+];
+
+function insideEllipse(
+  lon: number,
+  lat: number,
+  cLon: number,
+  cLat: number,
+  rx: number,
+  ry: number
+) {
+  if (rx <= 0 || ry <= 0) return false;
+
+  let dLon = lon - cLon;
+
+  // Wrap longitude distance.
+  dLon = ((dLon + 540) % 360) - 180;
+
+  const dLat = lat - cLat;
+
+  return (dLon * dLon) / (rx * rx) + (dLat * dLat) / (ry * ry) <= 1;
 }
 
-const LIGHT = normalize(-0.44, 0.58, 0.76);
+function isLand(lon: number, lat: number) {
+  for (const [cLon, cLat, rx, ry] of LAND_ELLIPSES) {
+    if (insideEllipse(lon, lat, cLon, cLat, rx, ry)) {
+      return true;
+    }
+  }
 
-function latLonToPoint(latDeg: number, lonDeg: number) {
+  return false;
+}
+
+function latLonToXYZ(latDeg: number, lonDeg: number) {
   const lat = (latDeg * Math.PI) / 180;
   const lon = (lonDeg * Math.PI) / 180;
-  const r = Math.cos(lat);
+
+  const cosLat = Math.cos(lat);
 
   return {
-    x: r * Math.cos(lon),
+    x: cosLat * Math.cos(lon),
     y: Math.sin(lat),
-    z: r * Math.sin(lon),
+    z: cosLat * Math.sin(lon),
   };
 }
 
-function buildGlobe() {
-  const grid: GridPoint[] = [];
-  const markers: MarkerPoint[] = [];
+function buildLandPoints() {
+  const points: Array<{ x: number; y: number; z: number }> = [];
 
-  // Latitude lines.
-  // Equator is emphasized so the object reads as a globe, not just a sphere.
-  for (let lat = -80; lat <= 80; lat += 20) {
-    const major = lat === 0;
+  for (let row = 0; row < ROWS; row++) {
+    const lat = 90 - ((row + 0.5) * 180) / ROWS;
 
-    for (let lon = 0; lon < 360; lon += 3) {
-      const p = latLonToPoint(lat, lon);
-      grid.push({ ...p, major });
+    for (let col = 0; col < COLS; col++) {
+      const lon = -180 + ((col + 0.5) * 360) / COLS;
+
+      if (!isLand(lon, lat)) continue;
+
+      points.push(latLonToXYZ(lat, lon));
     }
   }
 
-  // Longitude lines.
-  // Every 90 degrees is slightly emphasized.
-  for (let lon = 0; lon < 360; lon += 30) {
-    const major = lon % 90 === 0;
-
-    for (let lat = -87; lat <= 87; lat += 3) {
-      const p = latLonToPoint(lat, lon);
-      grid.push({ ...p, major });
-    }
-  }
-
-  // Poles.
-  grid.push({ x: 0, y: 1, z: 0, major: true });
-  grid.push({ x: 0, y: -1, z: 0, major: true });
-
-  // Optional server / region markers.
-  // Remove these if you want a pure wireframe globe.
-  const markerLocations: Array<[number, number]> = [
-    [37.77, -122.42], // San Francisco
-    [40.71, -74.01], // New York
-    [51.51, -0.13], // London
-    [50.11, 8.68], // Frankfurt
-    [1.35, 103.82], // Singapore
-    [35.68, 139.69], // Tokyo
-    [-33.87, 151.21], // Sydney
-    [-23.55, -46.63], // São Paulo
-  ];
-
-  for (const [lat, lon] of markerLocations) {
-    markers.push(latLonToPoint(lat, lon));
-  }
-
-  return { grid, markers };
+  return points;
 }
 
 export default function AsciiGlobe() {
@@ -111,29 +182,31 @@ export default function AsciiGlobe() {
       "(prefers-reduced-motion: reduce)"
     ).matches;
 
-    const { grid, markers } = buildGlobe();
+    const landPoints = buildLandPoints();
 
     const cosT = Math.cos(TILT);
     const sinT = Math.sin(TILT);
 
-    // Static outer silhouette circle in screen space.
-    // This helps the globe read as a solid round object.
+    // Static globe outline so the shape stays readable even over open ocean.
     const outline: Array<{ x: number; y: number }> = [];
-    const OUTLINE_POINTS = 240;
+    const OUTLINE_POINTS = 260;
 
     for (let i = 0; i < OUTLINE_POINTS; i++) {
       const t = (i / OUTLINE_POINTS) * Math.PI * 2;
-      outline.push({ x: Math.cos(t), y: Math.sin(t) });
+      outline.push({
+        x: Math.cos(t),
+        y: Math.sin(t),
+      });
     }
 
-    let angle = 0.75;
+    let angle = -2.1;
     let raf = 0;
 
     const projectX = (x: number) =>
-      Math.round((x * RADIUS + 1) * 0.5 * (COLS - 1));
+      Math.round((x * R + 1) * 0.5 * (COLS - 1));
 
     const projectY = (y: number) =>
-      Math.round((-y * RADIUS + 1) * 0.5 * (ROWS - 1));
+      Math.round((-y * R + 1) * 0.5 * (ROWS - 1));
 
     function render() {
       const buffer: string[][] = Array.from({ length: ROWS }, () =>
@@ -144,7 +217,7 @@ export default function AsciiGlobe() {
         Array<number>(COLS).fill(-Infinity)
       );
 
-      // Draw outer globe edge first.
+      // Draw outline first.
       for (const p of outline) {
         const sx = projectX(p.x);
         const sy = projectY(p.y);
@@ -152,7 +225,7 @@ export default function AsciiGlobe() {
         if (sx >= 0 && sx < COLS && sy >= 0 && sy < ROWS) {
           if (depth[sy][sx] < 0) {
             depth[sy][sx] = 0;
-            buffer[sy][sx] = ".";
+            buffer[sy][sx] = OUTLINE_CHAR;
           }
         }
       }
@@ -160,19 +233,19 @@ export default function AsciiGlobe() {
       const cosA = Math.cos(angle);
       const sinA = Math.sin(angle);
 
-      // Draw rotating latitude/longitude grid.
-      for (const p of grid) {
+      // Draw dotted landmasses.
+      for (const p of landPoints) {
         // Rotate around Y axis.
         const x = p.x * cosA + p.z * sinA;
         const z0 = -p.x * sinA + p.z * cosA;
         const y0 = p.y;
 
-        // Fixed camera tilt around X axis.
+        // Tilt camera.
         const y = y0 * cosT - z0 * sinT;
         const z = y0 * sinT + z0 * cosT;
 
-        // Only draw the visible front hemisphere.
-        if (z <= 0.02) continue;
+        // Front hemisphere only.
+        if (z <= 0.03) continue;
 
         const sx = projectX(x);
         const sy = projectY(y);
@@ -182,50 +255,13 @@ export default function AsciiGlobe() {
 
         depth[sy][sx] = z;
 
-        const light = Math.max(
-          0,
-          x * LIGHT.x + y * LIGHT.y + z * LIGHT.z
+        const level = Math.min(1, 0.2 + z * 0.8);
+        const idx = Math.min(
+          LAND_RAMP.length - 1,
+          Math.floor(level * (LAND_RAMP.length - 1))
         );
 
-        const level = Math.min(
-          1,
-          0.16 + 0.84 * (0.62 * z + 0.38 * light)
-        );
-
-        let idx = Math.max(
-          0,
-          Math.min(
-            RAMP.length - 1,
-            Math.floor(level * (RAMP.length - 1))
-          )
-        );
-
-        // Slightly brighten important lines.
-        if (p.major) {
-          idx = Math.min(RAMP.length - 1, idx + 1);
-        }
-
-        buffer[sy][sx] = RAMP[idx] ?? ".";
-      }
-
-      // Draw markers on top when they are on the visible side.
-      for (const m of markers) {
-        const x = m.x * cosA + m.z * sinA;
-        const z0 = -m.x * sinA + m.z * cosA;
-        const y0 = m.y;
-
-        const y = y0 * cosT - z0 * sinT;
-        const z = y0 * sinT + z0 * cosT;
-
-        if (z <= 0.08) continue;
-
-        const sx = projectX(x);
-        const sy = projectY(y);
-
-        if (sx < 0 || sx >= COLS || sy < 0 || sy >= ROWS) continue;
-
-        buffer[sy][sx] = MARKER_CHAR;
-        depth[sy][sx] = Math.max(depth[sy][sx], z);
+        buffer[sy][sx] = LAND_RAMP[idx] ?? ".";
       }
 
       if (pre) {
